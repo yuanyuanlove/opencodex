@@ -39,6 +39,9 @@ pub fn navigation_allowed(app: AppHandle) -> impl Fn(&Url) -> bool {
         if url.scheme() == "tauri" {
             return true;
         }
+        if app_origin_allowed(url, cfg!(target_os = "windows")) {
+            return true;
+        }
         if url.scheme() == "about" && url.as_str() == "about:blank" {
             return true;
         }
@@ -56,6 +59,22 @@ pub fn navigation_allowed(app: AppHandle) -> impl Fn(&Url) -> bool {
         }
         false
     }
+}
+
+/// Whether this URL is the app's own page on a platform that serves it over http.
+///
+/// The pinned Tauri serves the app from `tauri://localhost` everywhere except Windows and Android,
+/// where wry needs a http origin and it uses `tauri.localhost` instead. Without this the window's
+/// first navigation to its own page on Windows falls through to the branch that hands a URL to the
+/// external browser.
+///
+/// It is that one host, with no port: not localhost generally, which would admit anything any local
+/// process chose to serve, and not a widening of what the loopback dashboard may reach.
+pub fn app_origin_allowed(url: &Url, windows: bool) -> bool {
+    windows
+        && matches!(url.scheme(), "http" | "https")
+        && url.host_str() == Some("tauri.localhost")
+        && url.port().is_none()
 }
 
 pub fn show(window: &WebviewWindow) {
@@ -89,7 +108,37 @@ pub fn set_tray_policy(app: &AppHandle, visible: bool) {
 
 #[cfg(test)]
 mod tests {
-    use super::webview_user_agent;
+    use super::{app_origin_allowed, webview_user_agent};
+    use tauri::Url;
+
+    fn url(value: &str) -> Url {
+        Url::parse(value).expect("a url")
+    }
+
+    #[test]
+    fn the_windows_app_origin_is_allowed_where_it_is_used() {
+        assert!(app_origin_allowed(
+            &url("http://tauri.localhost/index.html"),
+            true
+        ));
+        assert!(app_origin_allowed(&url("https://tauri.localhost/"), true));
+        // Nowhere else: on the platforms that use the tauri scheme this host is just a name a
+        // local process could claim.
+        assert!(!app_origin_allowed(&url("http://tauri.localhost/"), false));
+    }
+
+    #[test]
+    fn it_does_not_widen_to_localhost_or_to_a_port() {
+        for value in [
+            "http://localhost/",
+            "http://127.0.0.1/",
+            "http://evil.tauri.localhost/",
+            "http://tauri.localhost.example.com/",
+            "http://tauri.localhost:8080/",
+        ] {
+            assert!(!app_origin_allowed(&url(value), true), "{value}");
+        }
+    }
 
     #[test]
     fn webview_user_agent_marks_the_desktop_shell() {
