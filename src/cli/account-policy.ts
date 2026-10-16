@@ -63,7 +63,7 @@ async function pool(args: string[], json: boolean, deps: RuntimeApiDeps): Promis
   if (limit !== undefined) patch.autoSwitchThreshold = integer(limit, 0);
   if (sticky !== undefined) patch.stickyLimit = integer(sticky, 1);
   if (strategy !== undefined) {
-    if (!["quota", "round-robin", "fill-first", ...(provider === "openai" ? ["reset-first"] : []),
+    if (!["quota", "round-robin", "fill-first", ...(provider === "openai" ? ["reset-first", "quota-weighted"] : []),
       ...(provider === "kiro" ? ["least-loaded"] : [])].includes(strategy)) usage();
     patch.strategy = strategy;
   }

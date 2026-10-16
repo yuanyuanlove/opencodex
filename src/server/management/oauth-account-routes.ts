@@ -599,7 +599,7 @@ export async function handleOauthAccountRoutes(ctx: ManagementContext): Promise<
     if (fields.strategy !== undefined) {
       const parsed = kind === "codex" ? parseCodexAccountPoolStrategy(fields.strategy) : parseGenericPoolStrategy(fields.strategy, provider);
       if (parsed === null) return jsonResponse({ error: kind === "codex"
-        ? "strategy must be one of: quota, round-robin, fill-first, reset-first"
+        ? "strategy must be one of: quota, round-robin, fill-first, reset-first, quota-weighted"
         : `strategy must be one of: quota, round-robin, fill-first${provider === "kiro" ? ", least-loaded" : ""}` }, 400);
       strategy = parsed;
     }

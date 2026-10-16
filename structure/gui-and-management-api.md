@@ -218,12 +218,11 @@ be treated as implemented:
 - reauthenticate subsequent frames after the handshake.
 
 ## API ownership
-
 `PUT /api/codex-auth/accounts/pause` manually pauses or resumes all existing entries whose account
 and workspace identity is confirmed to match, including native main and a pool duplicate. Its
 `affectedAccountIds` response contains only the existing opaque entry handles; emails and physical
 account ids are not serialized. Absent homes and API-key-only main logins allow Pool-only grouping;
-busy/unreadable main identity returns 503. See [OpenAI account operations](providers/openai-accounts.md#manual-account-pause-and-resume).
+busy/unreadable main identity returns 503. See [OpenAI account operations](providers/openai-accounts.md#manual-account-pause-and-resume). Codex pool settings accept and display `quota-weighted` according to the [account placement contract](providers/openai-accounts.md#quota-weighted-account-placement). Other OAuth pool strategy parsers do not accept this Codex-only mode.
 
 Model rows keep stored custom overrides separate from their effective `exportMetadata` projection.
 `src/server/management/model-row-export-metadata.ts` resolves inherited limits and capabilities;

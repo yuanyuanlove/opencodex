@@ -17,6 +17,8 @@ export function genericPoolKey(providerName: string): string {
 interface SelectionState {
   activeKey?: string;
   successes: number;
+  weighted?: boolean;
+  manualSeed?: boolean;
   currentWeights: Map<string, number>;
 }
 
@@ -43,11 +45,11 @@ export function parseAccountPoolStrategy(raw: unknown): OcxAccountPoolRotationSt
 }
 
 /** Codex alone supports ordering by the next shared quota reset. */
-export function parseCodexAccountPoolStrategy(raw: unknown): OcxAccountPoolRotationStrategy | "reset-first" | null {
-  return raw === "reset-first" ? raw : parseAccountPoolStrategy(raw);
+export function parseCodexAccountPoolStrategy(raw: unknown): OcxAccountPoolRotationStrategy | "reset-first" | "quota-weighted" | null {
+  return raw === "reset-first" || raw === "quota-weighted" ? raw : parseAccountPoolStrategy(raw);
 }
 
-export function normalizeCodexAccountPoolStrategy(raw: unknown): OcxAccountPoolRotationStrategy | "reset-first" {
+export function normalizeCodexAccountPoolStrategy(raw: unknown): OcxAccountPoolRotationStrategy | "reset-first" | "quota-weighted" {
   return parseCodexAccountPoolStrategy(raw) ?? DEFAULT_STRATEGY;
 }
 
@@ -145,17 +147,19 @@ function cloneSelectionState(state: SelectionState): SelectionState {
   return {
     activeKey: state.activeKey,
     successes: state.successes,
+    weighted: state.weighted,
+    manualSeed: state.manualSeed,
     currentWeights: new Map(state.currentWeights),
   };
 }
 
-function smoothWeightedIndex(ids: readonly string[], state: SelectionState): number {
+function smoothWeightedIndex(ids: readonly string[], state: SelectionState, weights?: ReadonlyMap<string, number>): number {
   let best = -1;
   let bestScore = Number.NEGATIVE_INFINITY;
   let total = 0;
-  const weight = 1;
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i]!;
+    const weight = weights?.get(id) ?? 1;
     const score = (state.currentWeights.get(id) ?? 0) + weight;
     state.currentWeights.set(id, score);
     total += weight;
@@ -180,12 +184,22 @@ function pickRoundRobinFromState(
   stickyLimit: number,
   state: SelectionState,
   commitSticky: boolean,
+  weights?: ReadonlyMap<string, number>,
 ): string | null {
   if (eligibleIds.length === 0) return null;
 
   const limit = normalizeAccountPoolStickyLimit(stickyLimit);
+  const weighted = weights !== undefined;
+  if (state.weighted !== undefined && state.weighted !== weighted) {
+    // A mode change discards automatic sticky debt, but not an operator's next-account seed.
+    if (!state.manualSeed) delete state.activeKey;
+    state.successes = 0;
+    state.currentWeights.clear();
+  }
+  state.weighted = weighted;
 
   if (state.activeKey && eligibleIds.includes(state.activeKey)) {
+    delete state.manualSeed;
     return state.activeKey;
   }
 
@@ -194,7 +208,7 @@ function pickRoundRobinFromState(
     state.successes = 0;
   }
 
-  const index = smoothWeightedIndex(eligibleIds, state);
+  const index = smoothWeightedIndex(eligibleIds, state, weights);
   if (index < 0) return null;
 
   const picked = eligibleIds[index]!;
@@ -209,8 +223,9 @@ export function pickRoundRobinAccount(
   poolKey: string,
   eligibleIds: readonly string[],
   stickyLimit: number,
+  weights?: ReadonlyMap<string, number>,
 ): string | null {
-  return pickRoundRobinFromState(eligibleIds, stickyLimit, getOrCreateState(poolKey), true);
+  return pickRoundRobinFromState(eligibleIds, stickyLimit, getOrCreateState(poolKey), true, weights);
 }
 
 /**
@@ -221,12 +236,13 @@ export function peekRoundRobinAccount(
   poolKey: string,
   eligibleIds: readonly string[],
   stickyLimit: number,
+  weights?: ReadonlyMap<string, number>,
 ): string | null {
   const live = selectionState.get(poolKey);
   const scratch = live
     ? cloneSelectionState(live)
     : { successes: 0, currentWeights: new Map<string, number>() };
-  return pickRoundRobinFromState(eligibleIds, stickyLimit, scratch, false);
+  return pickRoundRobinFromState(eligibleIds, stickyLimit, scratch, false, weights);
 }
 
 export function notePoolRotationSuccess(
@@ -264,6 +280,7 @@ export function notePoolRotationFailure(poolKey: string, accountId: string): voi
 export function seedPoolRotationAccount(poolKey: string, accountId: string): void {
   const state = getOrCreateState(poolKey);
   state.activeKey = accountId;
+  state.manualSeed = true;
   state.successes = 0;
   state.currentWeights.clear();
 }

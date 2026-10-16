@@ -1325,3 +1325,5 @@ be present instead of familiar Codex percentages. Returned key rows without
 quota-mode evidence are unverified/nonzero; an empty pool is valid. A read does not alter stored key
 selection or prove that a credential can serve a model. Do not replace a failed
 measurement with a paid test request or repeatedly force-refresh it.
+
+Codex can opt into remaining-quota weighted new-task placement (larger remainder wins; a near reset only breaks near-ties) with `ocx account pool openai --strategy quota-weighted`. Healthy bound tasks stay; reaching every account threshold prevents new assignments. `ocx account pool openai --strategy quota` restores the previous policy.

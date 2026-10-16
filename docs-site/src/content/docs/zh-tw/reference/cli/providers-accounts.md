@@ -359,3 +359,11 @@ ocx models remove deepseek/deepseek-v4 --yes
 帶斜線的模型選擇器為路由（`anthropic/claude-opus-5`）；裸 id 被視為原生 OpenAI 模型，因此 `--native` 僅在需要對一個否則看起來是路由的 id 強制該判讀時才需要。
 
 `--modalities` 僅接受 `text`、`image` 與 `audio`。Codex 將該欄位解析為封閉列舉，並拒絕包含任何其他值的整個目錄，因此 `add`、`edit` 與管理 API 都會拒絕錯誤值，而非儲存目錄寫入器稍後必須剝除的內容（#759）。
+
+### `quota-weighted`
+
+新建或未綁定任務分配給剩餘額度最多的帳號；接近重置只為本視窗加少量平分決勝權重（最多 +10%，較寬檔 +5%），永遠不會反超剩餘更多的帳號。剩餘相同則均勻輪轉；額度未知的帳號在被觀測到之前保留少量比例探測份額。各視窗共同限制權重，健康會話保持綁定。達到帳號有效門檻後停止分配新任務；所有帳號均達門檻時不回退到目前帳號。未知額度只獲小份額。獨立模型額度使用原配額模式。此模式僅適用於 Codex。
+
+```sh
+ocx account pool openai --strategy quota-weighted
+```

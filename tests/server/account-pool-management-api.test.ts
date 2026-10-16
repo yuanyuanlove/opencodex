@@ -761,33 +761,33 @@ describe("unified pool-settings contract (#695 wp5c)", () => {
     if (dir) removeTreeWithRetry(dir);
   });
 
-  test("reset-first round-trips through canonical and legacy Codex settings only", async () => {
+  test.each(["reset-first", "quota-weighted"])("%s round-trips through canonical and legacy Codex settings only", async strategy => {
     const server = startServer(0);
     try {
       const write = async (provider: string, strategy: string) => fetch(new URL("/api/pool/settings", server.url), {
         method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ provider, strategy }),
       });
-      const result = await write("openai", "reset-first");
+      const result = await write("openai", strategy);
       expect(result.status).toBe(200);
-      expect(await result.json()).toMatchObject({ kind: "codex", strategy: "reset-first" });
-      expect(loadConfig().accountPoolStrategy).toBe("reset-first");
+      expect(await result.json()).toMatchObject({ kind: "codex", strategy: strategy });
+      expect(loadConfig().accountPoolStrategy).toBe(strategy);
       const canonical = await fetch(new URL("/api/pool/settings?provider=openai", server.url));
-      expect(await canonical.json()).toMatchObject({ strategy: "reset-first" });
+      expect(await canonical.json()).toMatchObject({ strategy: strategy });
       const legacy = new Request("http://localhost/api/codex-auth/active");
       const legacyRead = await handleCodexAuthAPI(legacy, new URL(legacy.url), loadConfig());
-      expect(await legacyRead!.json()).toMatchObject({ accountPoolStrategy: "reset-first" });
+      expect(await legacyRead!.json()).toMatchObject({ accountPoolStrategy: strategy });
       for (const provider of ["anthropic", "google-antigravity"]) {
-        const rejected = await write(provider, "reset-first");
+        const rejected = await write(provider, strategy);
         expect(rejected.status).toBe(400);
         await rejected.text();
       }
       const compatibility = new Request("http://localhost/api/codex-auth/pool-strategy", {
-        method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ strategy: "reset-first" }),
+        method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ strategy: strategy }),
       });
       const compatibilityWrite = await handleCodexAuthAPI(compatibility, new URL(compatibility.url), loadConfig());
       expect(compatibilityWrite!.status).toBe(200);
-      expect(await compatibilityWrite!.json()).toMatchObject({ accountPoolStrategy: "reset-first" });
-      expect(loadConfig().accountPoolStrategy).toBe("reset-first");
+      expect(await compatibilityWrite!.json()).toMatchObject({ accountPoolStrategy: strategy });
+      expect(loadConfig().accountPoolStrategy).toBe(strategy);
     } finally {
       await server.stop(true);
     }
